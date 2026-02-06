@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Shared Tactical Map</title>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+<style>
+body{
+    margin:0;
+    padding:0;
+    background:#0e0e0e;
+    color:white;
+    font-family:Arial,sans-serif;
+    text-align:center;
+}
+
+#loginBox{
+    padding:15px;
+}
+
+#mapContainer{
+    position:relative;
+    display:inline-block;
+}
+
+#map{
+    width:800px;
+    user-select:none;
+    cursor:crosshair;
+}
+
+.marker{
+    position:absolute;
+    transform:translate(-50%,-50%);
+    text-align:center;
+    font-size:12px;
+    color:white;
+    cursor:pointer;
+    z-index:10;
+}
+
+.dot{
+    width:12px;
+    height:12px;
+    background:red;
+    border-radius:50%;
+    margin:auto;
+    box-shadow:0 0 6px rgba(255,0,0,0.9);
+}
+
+.name{
+    font-size:11px;
+    margin-top:2px;
+    background:rgba(0,0,0,0.65);
+    padding:2px 6px;
+    border-radius:4px;
+    white-space:nowrap;
+}
+</style>
+</head>
+
+<body>
+
+<div id="loginBox">
+    <input id="nickname" placeholder="닉네임 입력">
+    <button onclick="enter()">입장</button>
+</div>
+
+<div id="mapContainer" style="display:none;">
+    <img src="map.png" id="map">
+</div>
+
+<script>
+/* ================= Firebase ================= */
+const firebaseConfig = {
+    apiKey: "AIzaSyBZUhksZ6rd_8t9iTFN2Mo-45zNM4E4yuQ",
+    authDomain: "rlachdanakxkq.firebaseapp.com",
+    databaseURL: "https://rlachdanakxkq-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "rlachdanakxkq",
+    storageBucket: "rlachdanakxkq.firebasestorage.app",
+    messagingSenderId: "800304150391",
+    appId: "1:800304150391:web:45b4041a549edc3ce3d372"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+/* ============================================ */
+
+let myName = "";
+
+function enter(){
+    const name = document.getElementById("nickname").value.trim();
+    if(!name){
+        alert("닉네임 입력해라");
+        return;
+    }
+    myName = name;
+    document.getElementById("loginBox").style.display="none";
+    document.getElementById("mapContainer").style.display="block";
+}
+
+const map = document.getElementById("map");
+
+/* ================= 마커 생성 ================= */
+map.addEventListener("click",(e)=>{
+    if(!myName) return;
+
+    const rect = map.getBoundingClientRect();
+
+    // 🔥 비율 좌표로 변환 (0~1)
+    const rx = (e.clientX - rect.left) / rect.width;
+    const ry = (e.clientY - rect.top) / rect.height;
+
+    db.ref("markers").push({
+        name: myName,
+        rx: rx,
+        ry: ry,
+        time: Date.now()
+    });
+});
+
+/* ================= 마커 표시 ================= */
+db.ref("markers").on("child_added",(snapshot)=>{
+    const data = snapshot.val();
+    const fbKey = snapshot.key;
+
+    const marker = document.createElement("div");
+    marker.className="marker";
+    marker.dataset.key = fbKey;
+
+    // 🔥 비율 → 실제 px 변환
+    const mapRect = map.getBoundingClientRect();
+    const x = data.rx * mapRect.width;
+    const y = data.ry * mapRect.height;
+
+    marker.style.left = x + "px";
+    marker.style.top  = y + "px";
+
+    const dot = document.createElement("div");
+    dot.className="dot";
+
+    const name = document.createElement("div");
+    name.className="name";
+    name.innerText = data.name;
+
+    marker.appendChild(dot);
+    marker.appendChild(name);
+
+    /* ===== 마커 클릭 시 삭제 (누구든 삭제 가능) ===== */
+    marker.addEventListener("click",(ev)=>{
+        ev.stopPropagation();
+        db.ref("markers/" + fbKey).remove();
+    });
+
+    document.getElementById("mapContainer").appendChild(marker);
+});
+
+/* ================= 마커 삭제 ================= */
+db.ref("markers").on("child_removed",(snapshot)=>{
+    const fbKey = snapshot.key;
+
+    document.querySelectorAll(".marker").forEach(m=>{
+        if(m.dataset.key === fbKey){
+            m.remove();
+        }
+    });
+});
+</script>
+
+</body>
+</html>
