@@ -16,7 +16,7 @@ body{
     text-align:center;
 }
 
-#loginBox{padding:10px;}
+#loginBox{ padding:10px; }
 
 #mapContainer{
     position:relative;
@@ -27,10 +27,10 @@ body{
     width:100%;
     max-width:1200px;
     height:auto;
-    user-select:none;
     cursor:crosshair;
 }
 
+/* ⭐ 중요: pointer-events 없음 */
 .marker{
     position:absolute;
     transform:translate(-50%,-50%);
@@ -38,7 +38,7 @@ body{
     font-size:11px;
     color:white;
     cursor:pointer;
-    z-index:10;
+    z-index:100;
 }
 
 .dot{
@@ -47,7 +47,6 @@ body{
     background:red;
     border-radius:50%;
     margin:auto;
-    box-shadow:0 0 6px rgba(255,0,0,0.9);
 }
 
 .label{
@@ -98,7 +97,7 @@ function enter(){
     container.style.display="inline-block";
 }
 
-/* 좌표 계산 */
+/* 좌표 변환 */
 function getCoords(e){
     const rect=map.getBoundingClientRect();
     const scaleX=map.naturalWidth/rect.width;
@@ -110,7 +109,7 @@ function getCoords(e){
     };
 }
 
-/* 클릭 → 마커 생성 */
+/* 지도 클릭 → 마커 생성 */
 map.addEventListener("click",(e)=>{
     if(!myName) return;
 
@@ -119,12 +118,11 @@ map.addEventListener("click",(e)=>{
     db.ref("markers").push({
         name:myName,
         x:p.x,
-        y:p.y,
-        time:Date.now()
+        y:p.y
     });
 });
 
-/* 마커 생성 */
+/* 마커 추가 */
 db.ref("markers").on("child_added",(snap)=>{
     const d=snap.val();
     const fbKey=snap.key;
@@ -135,7 +133,7 @@ db.ref("markers").on("child_added",(snap)=>{
 
     const marker=document.createElement("div");
     marker.className="marker";
-    marker.dataset.fbkey=fbKey;
+    marker.dataset.key=fbKey;
 
     marker.style.left=(d.x*scaleX)+"px";
     marker.style.top=(d.y*scaleY)+"px";
@@ -150,21 +148,21 @@ db.ref("markers").on("child_added",(snap)=>{
     marker.appendChild(dot);
     marker.appendChild(label);
 
-    /* ⭐ 마커 클릭하면 삭제 (누구든 가능) */
-    marker.onclick=(ev)=>{
-        ev.stopPropagation();
+    /* ⭐ 마커 클릭하면 삭제 */
+    marker.addEventListener("click",(ev)=>{
+        ev.stopPropagation(); // 지도 클릭 막기
         db.ref("markers/"+fbKey).remove();
-    };
+    });
 
     container.appendChild(marker);
 });
 
-/* 마커 삭제 */
+/* 마커 삭제 동기화 */
 db.ref("markers").on("child_removed",(snap)=>{
     const fbKey=snap.key;
 
     document.querySelectorAll(".marker").forEach(m=>{
-        if(m.dataset.fbkey===fbKey){
+        if(m.dataset.key===fbKey){
             m.remove();
         }
     });
