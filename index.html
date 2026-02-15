@@ -61,7 +61,6 @@ body{
 </div>
 
 <script>
-/* Firebase */
 const firebaseConfig={
  apiKey:"AIzaSyBZUhksZ6rd_8t9iTFN2Mo-45zNM4E4yuQ",
  authDomain:"rlachdanakxkq.firebaseapp.com",
@@ -82,78 +81,106 @@ function enter(){
  container.style.display="inline-block";
 }
 
-/* 좌표 계산 */
-function getCoords(e){
+/* ⭐ 클릭 좌표 → 비율로 저장 */
+function getRatio(e){
  const rect=map.getBoundingClientRect();
- const sx=map.naturalWidth/rect.width;
- const sy=map.naturalHeight/rect.height;
 
  return {
-  x:(e.clientX-rect.left)*sx,
-  y:(e.clientY-rect.top)*sy
+  rx:(e.clientX-rect.left)/rect.width,
+  ry:(e.clientY-rect.top)/rect.height
  };
 }
 
-/* 클릭 → 생성 */
+/* 지도 클릭 */
 map.addEventListener("click",(e)=>{
  if(!myName) return;
 
- const p=getCoords(e);
+ const p=getRatio(e);
 
  db.ref("markers").push({
   name:myName,
-  x:p.x,
-  y:p.y
+  rx:p.rx,
+  ry:p.ry
  });
 });
 
-/* ⭐⭐⭐ 핵심: 이미지 완전히 로딩 후 마커 불러오기 */
-map.onload=()=>{
+/* 마커 생성 (비율 → px 변환) */
+db.ref("markers").on("child_added",(snap)=>{
+ const d=snap.val();
+ const key=snap.key;
 
- db.ref("markers").on("child_added",(snap)=>{
-  const d=snap.val();
-  const key=snap.key;
+ const rect=map.getBoundingClientRect();
 
-  const rect=map.getBoundingClientRect();
-  const sx=rect.width/map.naturalWidth;
-  const sy=rect.height/map.naturalHeight;
+ const m=document.createElement("div");
+ m.className="marker";
+ m.dataset.key=key;
 
-  const m=document.createElement("div");
-  m.className="marker";
-  m.dataset.key=key;
+ m.style.left=(d.rx*rect.width)+"px";
+ m.style.top=(d.ry*rect.height)+"px";
 
-  m.style.left=(d.x*sx)+"px";
-  m.style.top=(d.y*sy)+"px";
+ const dot=document.createElement("div");
+ dot.className="dot";
 
-  const dot=document.createElement("div");
-  dot.className="dot";
+ const label=document.createElement("div");
+ label.className="label";
+ label.innerText=d.name;
 
-  const label=document.createElement("div");
-  label.className="label";
-  label.innerText=d.name;
+ m.appendChild(dot);
+ m.appendChild(label);
 
-  m.appendChild(dot);
-  m.appendChild(label);
-
-  /* 마커 클릭 → 삭제 */
-  m.onclick=(ev)=>{
+ m.onclick=(ev)=>{
    ev.stopPropagation();
    db.ref("markers/"+key).remove();
-  };
+ };
 
-  container.appendChild(m);
+ container.appendChild(m);
+});
+
+/* 삭제 */
+db.ref("markers").on("child_removed",(snap)=>{
+ const key=snap.key;
+ document.querySelectorAll(".marker").forEach(m=>{
+  if(m.dataset.key===key) m.remove();
  });
+});
 
- /* 삭제 동기화 */
- db.ref("markers").on("child_removed",(snap)=>{
-  const key=snap.key;
+/* ⭐ 화면 크기 바뀌면 자동 재정렬 */
+window.addEventListener("resize",()=>{
+ document.querySelectorAll(".marker").forEach(m=>m.remove());
 
-  document.querySelectorAll(".marker").forEach(m=>{
-   if(m.dataset.key===key) m.remove();
-  });
+ db.ref("markers").once("value",(snapshot)=>{
+   snapshot.forEach(child=>{
+     const d=child.val();
+     const key=child.key;
+
+     const rect=map.getBoundingClientRect();
+
+     const m=document.createElement("div");
+     m.className="marker";
+     m.dataset.key=key;
+
+     m.style.left=(d.rx*rect.width)+"px";
+     m.style.top=(d.ry*rect.height)+"px";
+
+     const dot=document.createElement("div");
+     dot.className="dot";
+
+     const label=document.createElement("div");
+     label.className="label";
+     label.innerText=d.name;
+
+     m.appendChild(dot);
+     m.appendChild(label);
+
+     m.onclick=(ev)=>{
+       ev.stopPropagation();
+       db.ref("markers/"+key).remove();
+     };
+
+     container.appendChild(m);
+   });
  });
-
-};
+});
 </script>
 
 </body>
