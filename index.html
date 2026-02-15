@@ -8,79 +8,47 @@
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
 <style>
-body{
-    margin:0;
-    background:#111;
-    color:white;
-    font-family:Arial;
-    text-align:center;
-}
+body{margin:0;background:#111;color:white;text-align:center;font-family:Arial;}
+#mapContainer{position:relative;display:inline-block;}
+#map{width:100%;max-width:1200px;cursor:crosshair;}
 
-#loginBox{ padding:10px; }
-
-#mapContainer{
-    position:relative;
-    display:inline-block;
-}
-
-#map{
-    width:100%;
-    max-width:1200px;
-    height:auto;
-    cursor:crosshair;
-}
-
-/* ⭐ 중요: pointer-events 없음 */
 .marker{
-    position:absolute;
-    transform:translate(-50%,-50%);
-    text-align:center;
-    font-size:11px;
-    color:white;
-    cursor:pointer;
-    z-index:100;
+ position:absolute;
+ transform:translate(-50%,-50%);
+ cursor:pointer;
+ z-index:10;
 }
-
 .dot{
-    width:10px;
-    height:10px;
-    background:red;
-    border-radius:50%;
-    margin:auto;
+ width:10px;height:10px;
+ background:red;border-radius:50%;
+ margin:auto;
 }
-
 .label{
-    background:rgba(0,0,0,0.7);
-    padding:2px 5px;
-    border-radius:4px;
-    margin-top:2px;
-    white-space:nowrap;
+ background:rgba(0,0,0,.7);
+ padding:2px 5px;
+ border-radius:4px;
+ font-size:11px;
 }
 </style>
 </head>
 
 <body>
 
-<div id="loginBox">
-<input id="nickname" placeholder="닉네임 입력">
+<input id="nickname" placeholder="닉네임">
 <button onclick="enter()">입장</button>
-</div>
 
 <div id="mapContainer" style="display:none;">
 <img src="map.jpg" id="map">
 </div>
 
 <script>
+/* Firebase */
 const firebaseConfig={
-    apiKey:"AIzaSyBZUhksZ6rd_8t9iTFN2Mo-45zNM4E4yuQ",
-    authDomain:"rlachdanakxkq.firebaseapp.com",
-    databaseURL:"https://rlachdanakxkq-default-rtdb.europe-west1.firebasedatabase.app",
-    projectId:"rlachdanakxkq",
-    storageBucket:"rlachdanakxkq.firebasestorage.app",
-    messagingSenderId:"800304150391",
-    appId:"1:800304150391:web:45b4041a549edc3ce3d372"
+ apiKey:"AIzaSyBZUhksZ6rd_8t9iTFN2Mo-45zNM4E4yuQ",
+ authDomain:"rlachdanakxkq.firebaseapp.com",
+ databaseURL:"https://rlachdanakxkq-default-rtdb.europe-west1.firebasedatabase.app",
+ projectId:"rlachdanakxkq"
 };
-
 firebase.initializeApp(firebaseConfig);
 const db=firebase.database();
 
@@ -89,83 +57,74 @@ const map=document.getElementById("map");
 const container=document.getElementById("mapContainer");
 
 function enter(){
-    const name=document.getElementById("nickname").value.trim();
-    if(!name){ alert("닉네임 입력"); return; }
-
-    myName=name;
-    document.getElementById("loginBox").style.display="none";
-    container.style.display="inline-block";
+ myName=document.getElementById("nickname").value.trim();
+ if(!myName){alert("닉네임 입력");return;}
+ container.style.display="inline-block";
 }
 
 /* 좌표 변환 */
 function getCoords(e){
-    const rect=map.getBoundingClientRect();
-    const scaleX=map.naturalWidth/rect.width;
-    const scaleY=map.naturalHeight/rect.height;
-
-    return {
-        x:(e.clientX-rect.left)*scaleX,
-        y:(e.clientY-rect.top)*scaleY
-    };
+ const rect=map.getBoundingClientRect();
+ const sx=map.naturalWidth/rect.width;
+ const sy=map.naturalHeight/rect.height;
+ return {
+   x:(e.clientX-rect.left)*sx,
+   y:(e.clientY-rect.top)*sy
+ };
 }
 
 /* 지도 클릭 → 마커 생성 */
 map.addEventListener("click",(e)=>{
-    if(!myName) return;
+ if(!myName) return;
+ const p=getCoords(e);
 
-    const p=getCoords(e);
-
-    db.ref("markers").push({
-        name:myName,
-        x:p.x,
-        y:p.y
-    });
+ db.ref("markers").push({
+   name:myName,
+   x:p.x,
+   y:p.y
+ });
 });
 
-/* 마커 추가 */
+/* ⭐ 기존 마커 포함 전체 자동 로드 */
 db.ref("markers").on("child_added",(snap)=>{
-    const d=snap.val();
-    const fbKey=snap.key;
+ const d=snap.val();
+ const key=snap.key;
 
-    const rect=map.getBoundingClientRect();
-    const scaleX=rect.width/map.naturalWidth;
-    const scaleY=rect.height/map.naturalHeight;
+ const rect=map.getBoundingClientRect();
+ const sx=rect.width/map.naturalWidth;
+ const sy=rect.height/map.naturalHeight;
 
-    const marker=document.createElement("div");
-    marker.className="marker";
-    marker.dataset.key=fbKey;
+ const m=document.createElement("div");
+ m.className="marker";
+ m.dataset.key=key;
+ m.style.left=(d.x*sx)+"px";
+ m.style.top=(d.y*sy)+"px";
 
-    marker.style.left=(d.x*scaleX)+"px";
-    marker.style.top=(d.y*scaleY)+"px";
+ const dot=document.createElement("div");
+ dot.className="dot";
 
-    const dot=document.createElement("div");
-    dot.className="dot";
+ const label=document.createElement("div");
+ label.className="label";
+ label.innerText=d.name;
 
-    const label=document.createElement("div");
-    label.className="label";
-    label.innerText=d.name;
+ m.appendChild(dot);
+ m.appendChild(label);
 
-    marker.appendChild(dot);
-    marker.appendChild(label);
+ /* 클릭 삭제 (누구든 가능) */
+ m.onclick=(ev)=>{
+   ev.stopPropagation();
+   db.ref("markers/"+key).remove();
+ };
 
-    /* ⭐ 마커 클릭하면 삭제 */
-    marker.addEventListener("click",(ev)=>{
-        ev.stopPropagation(); // 지도 클릭 막기
-        db.ref("markers/"+fbKey).remove();
-    });
-
-    container.appendChild(marker);
+ container.appendChild(m);
 });
 
-/* 마커 삭제 동기화 */
+/* 삭제 동기화 */
 db.ref("markers").on("child_removed",(snap)=>{
-    const fbKey=snap.key;
-
-    document.querySelectorAll(".marker").forEach(m=>{
-        if(m.dataset.key===fbKey){
-            m.remove();
-        }
-    });
+ const key=snap.key;
+ document.querySelectorAll(".marker").forEach(m=>{
+   if(m.dataset.key===key) m.remove();
+ });
 });
 </script>
 
