@@ -15,32 +15,26 @@ body{
  text-align:center;
  font-family:Arial;
 }
-
 #mapContainer{
  position:relative;
  display:inline-block;
 }
-
 #map{
  width:100%;
  max-width:1200px;
  cursor:crosshair;
 }
-
 .marker{
  position:absolute;
  transform:translate(-50%,-50%);
  cursor:pointer;
  z-index:10;
 }
-
 .dot{
- width:10px;
- height:10px;
+ width:10px;height:10px;
  background:red;
  border-radius:50%;
 }
-
 .label{
  background:rgba(0,0,0,.7);
  padding:2px 5px;
@@ -72,26 +66,37 @@ firebase.initializeApp(firebaseConfig);
 const db=firebase.database();
 
 let myName="";
+let loaded=false;
+
 const map=document.getElementById("map");
 const container=document.getElementById("mapContainer");
 
+/* 입장 */
 function enter(){
  myName=document.getElementById("nickname").value.trim();
- if(!myName){alert("닉네임 입력");return;}
+ if(!myName){ alert("닉네임 입력"); return; }
+
  container.style.display="inline-block";
+
+ // ⭐ 지도 실제 보인 뒤 마커 로드
+ setTimeout(()=>{
+   if(!loaded){
+     loadMarkers();
+     loaded=true;
+   }
+ },100);
 }
 
-/* ⭐ 클릭 좌표 → 비율로 저장 */
+/* 좌표 비율 저장 */
 function getRatio(e){
  const rect=map.getBoundingClientRect();
-
  return {
   rx:(e.clientX-rect.left)/rect.width,
   ry:(e.clientY-rect.top)/rect.height
  };
 }
 
-/* 지도 클릭 */
+/* 클릭 → 생성 */
 map.addEventListener("click",(e)=>{
  if(!myName) return;
 
@@ -104,82 +109,56 @@ map.addEventListener("click",(e)=>{
  });
 });
 
-/* 마커 생성 (비율 → px 변환) */
-db.ref("markers").on("child_added",(snap)=>{
- const d=snap.val();
- const key=snap.key;
+/* ⭐ 마커 로딩 함수 */
+function loadMarkers(){
 
- const rect=map.getBoundingClientRect();
+ db.ref("markers").on("child_added",(snap)=>{
+   const d=snap.val();
+   const key=snap.key;
 
- const m=document.createElement("div");
- m.className="marker";
- m.dataset.key=key;
+   const rect=map.getBoundingClientRect();
 
- m.style.left=(d.rx*rect.width)+"px";
- m.style.top=(d.ry*rect.height)+"px";
+   const m=document.createElement("div");
+   m.className="marker";
+   m.dataset.key=key;
 
- const dot=document.createElement("div");
- dot.className="dot";
+   m.style.left=(d.rx*rect.width)+"px";
+   m.style.top=(d.ry*rect.height)+"px";
 
- const label=document.createElement("div");
- label.className="label";
- label.innerText=d.name;
+   const dot=document.createElement("div");
+   dot.className="dot";
 
- m.appendChild(dot);
- m.appendChild(label);
+   const label=document.createElement("div");
+   label.className="label";
+   label.innerText=d.name;
 
- m.onclick=(ev)=>{
-   ev.stopPropagation();
-   db.ref("markers/"+key).remove();
- };
+   m.appendChild(dot);
+   m.appendChild(label);
 
- container.appendChild(m);
-});
+   m.onclick=(ev)=>{
+     ev.stopPropagation();
+     db.ref("markers/"+key).remove();
+   };
 
-/* 삭제 */
-db.ref("markers").on("child_removed",(snap)=>{
- const key=snap.key;
- document.querySelectorAll(".marker").forEach(m=>{
-  if(m.dataset.key===key) m.remove();
+   container.appendChild(m);
  });
-});
 
-/* ⭐ 화면 크기 바뀌면 자동 재정렬 */
-window.addEventListener("resize",()=>{
- document.querySelectorAll(".marker").forEach(m=>m.remove());
-
- db.ref("markers").once("value",(snapshot)=>{
-   snapshot.forEach(child=>{
-     const d=child.val();
-     const key=child.key;
-
-     const rect=map.getBoundingClientRect();
-
-     const m=document.createElement("div");
-     m.className="marker";
-     m.dataset.key=key;
-
-     m.style.left=(d.rx*rect.width)+"px";
-     m.style.top=(d.ry*rect.height)+"px";
-
-     const dot=document.createElement("div");
-     dot.className="dot";
-
-     const label=document.createElement("div");
-     label.className="label";
-     label.innerText=d.name;
-
-     m.appendChild(dot);
-     m.appendChild(label);
-
-     m.onclick=(ev)=>{
-       ev.stopPropagation();
-       db.ref("markers/"+key).remove();
-     };
-
-     container.appendChild(m);
+ db.ref("markers").on("child_removed",(snap)=>{
+   const key=snap.key;
+   document.querySelectorAll(".marker").forEach(m=>{
+     if(m.dataset.key===key) m.remove();
    });
  });
+}
+
+/* 화면 리사이즈 → 위치 재계산 */
+window.addEventListener("resize",()=>{
+ document.querySelectorAll(".marker").forEach(m=>m.remove());
+ loaded=false;
+ if(container.style.display!=="none"){
+   loadMarkers();
+   loaded=true;
+ }
 });
 </script>
 
