@@ -39,6 +39,7 @@ body{
  z-index:10;
 }
 
+/* 일반 마커 (빨강) */
 .dot{
  width:10px;
  height:10px;
@@ -46,14 +47,13 @@ body{
  border-radius:50%;
 }
 
-/* ⭐ 파란색 적 위치 */
+/* 🔵 적 위치 (크기 동일) */
 .enemyDot{
- width:14px;
- height:14px;
- background:#0077ff;   /* 파란색 */
- border:2px solid #00ffff;
+ width:10px;   /* ⭐ 일반과 동일 */
+ height:10px;
+ background:#0077ff;
  border-radius:50%;
- box-shadow:0 0 8px #00aaff;
+ box-shadow:0 0 6px #00aaff;
 }
 
 .label{
@@ -146,6 +146,7 @@ function getRatio(e){
  };
 }
 
+/* 지도 클릭 → 마커 생성 */
 map.addEventListener("click",(e)=>{
  if(!myName) return;
 
@@ -159,6 +160,7 @@ map.addEventListener("click",(e)=>{
  });
 });
 
+/* 마커 로딩 */
 function loadMarkers(){
 
  db.ref("markers").on("child_added",(snap)=>{
@@ -184,13 +186,12 @@ function loadMarkers(){
 
    const label=document.createElement("div");
    label.className="label";
-   label.innerText=d.type==="enemy"
-      ? "ENEMY - "+d.name
-      : d.name;
+   label.innerText=d.name;  /* ⭐ ENEMY 표시 제거 */
 
    m.appendChild(dot);
    m.appendChild(label);
 
+   /* 마커 클릭 삭제 */
    m.onclick=(ev)=>{
      ev.stopPropagation();
      db.ref("markers/"+key).remove();
@@ -207,6 +208,7 @@ function loadMarkers(){
  });
 }
 
+/* 접속자 목록 */
 function watchUsers(){
  db.ref("online").on("value",(snap)=>{
    const data=snap.val()||{};
