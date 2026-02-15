@@ -39,7 +39,7 @@ body{
  z-index:10;
 }
 
-/* 일반 마커 (빨강) */
+/* 아군 */
 .dot{
  width:10px;
  height:10px;
@@ -47,9 +47,9 @@ body{
  border-radius:50%;
 }
 
-/* 🔵 적 위치 (크기 동일) */
+/* 적 */
 .enemyDot{
- width:10px;   /* ⭐ 일반과 동일 */
+ width:10px;
  height:10px;
  background:#0077ff;
  border-radius:50%;
@@ -64,6 +64,7 @@ body{
  white-space:nowrap;
 }
 
+/* 접속자 */
 #users{
  position:fixed;
  right:10px;
@@ -74,6 +75,34 @@ body{
  font-size:12px;
  text-align:left;
 }
+
+/* ⭐⭐ 범례 추가 */
+#legend{
+ position:fixed;
+ left:10px;
+ top:10px;
+ background:rgba(0,0,0,.75);
+ padding:8px 10px;
+ border-radius:6px;
+ font-size:13px;
+ text-align:left;
+}
+
+.legendRow{
+ display:flex;
+ align-items:center;
+ margin:4px 0;
+}
+
+.legendDot{
+ width:10px;
+ height:10px;
+ border-radius:50%;
+ margin-right:6px;
+}
+
+.red{ background:red; }
+.blue{ background:#0077ff; box-shadow:0 0 6px #00aaff; }
 </style>
 </head>
 
@@ -85,6 +114,17 @@ body{
 
 <button onclick="setMode('normal')">일반</button>
 <button onclick="setMode('enemy')">적 위치</button>
+</div>
+
+<!-- ⭐ 범례 표시 -->
+<div id="legend">
+<b>마커 설명</b>
+<div class="legendRow">
+ <div class="legendDot red"></div> 아군
+</div>
+<div class="legendRow">
+ <div class="legendDot blue"></div> 적
+</div>
 </div>
 
 <div id="users">
@@ -110,14 +150,11 @@ const db=firebase.database();
 let myName="";
 let mode="normal";
 let loaded=false;
-let userRef=null;
 
 const map=document.getElementById("map");
 const container=document.getElementById("mapContainer");
 
-function setMode(m){
- mode=m;
-}
+function setMode(m){ mode=m; }
 
 function enter(){
  myName=document.getElementById("nickname").value.trim();
@@ -125,9 +162,8 @@ function enter(){
 
  container.style.display="inline-block";
 
- userRef=db.ref("online/"+myName);
- userRef.set(true);
- userRef.onDisconnect().remove();
+ db.ref("online/"+myName).set(true);
+ db.ref("online/"+myName).onDisconnect().remove();
 
  setTimeout(()=>{
    if(!loaded){
@@ -146,7 +182,6 @@ function getRatio(e){
  };
 }
 
-/* 지도 클릭 → 마커 생성 */
 map.addEventListener("click",(e)=>{
  if(!myName) return;
 
@@ -160,7 +195,6 @@ map.addEventListener("click",(e)=>{
  });
 });
 
-/* 마커 로딩 */
 function loadMarkers(){
 
  db.ref("markers").on("child_added",(snap)=>{
@@ -177,21 +211,15 @@ function loadMarkers(){
    m.style.top=(d.ry*rect.height)+"px";
 
    const dot=document.createElement("div");
-
-   if(d.type==="enemy"){
-     dot.className="enemyDot";
-   }else{
-     dot.className="dot";
-   }
+   dot.className=(d.type==="enemy") ? "enemyDot" : "dot";
 
    const label=document.createElement("div");
    label.className="label";
-   label.innerText=d.name;  /* ⭐ ENEMY 표시 제거 */
+   label.innerText=d.name;
 
    m.appendChild(dot);
    m.appendChild(label);
 
-   /* 마커 클릭 삭제 */
    m.onclick=(ev)=>{
      ev.stopPropagation();
      db.ref("markers/"+key).remove();
@@ -208,7 +236,6 @@ function loadMarkers(){
  });
 }
 
-/* 접속자 목록 */
 function watchUsers(){
  db.ref("online").on("value",(snap)=>{
    const data=snap.val()||{};
