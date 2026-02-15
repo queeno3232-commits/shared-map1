@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <title>Shared Map</title>
 
-<!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
@@ -17,9 +16,7 @@ body{
     text-align:center;
 }
 
-#loginBox{
-    padding:10px;
-}
+#loginBox{padding:10px;}
 
 #mapContainer{
     position:relative;
@@ -28,7 +25,7 @@ body{
 
 #map{
     width:100%;
-    max-width:1200px;   /* 🔥 큰 맵 대응 */
+    max-width:1200px;
     height:auto;
     user-select:none;
     cursor:crosshair;
@@ -40,7 +37,7 @@ body{
     text-align:center;
     font-size:11px;
     color:white;
-    pointer-events:auto;
+    cursor:pointer;
     z-index:10;
 }
 
@@ -59,7 +56,6 @@ body{
     border-radius:4px;
     margin-top:2px;
     white-space:nowrap;
-    font-size:11px;
 }
 </style>
 </head>
@@ -67,98 +63,82 @@ body{
 <body>
 
 <div id="loginBox">
-    <input type="text" id="nickname" placeholder="닉네임 입력">
-    <button onclick="enter()">입장</button>
+<input id="nickname" placeholder="닉네임 입력">
+<button onclick="enter()">입장</button>
 </div>
 
 <div id="mapContainer" style="display:none;">
-    <!-- 🔥 맵 이미지 변경 -->
-    <img src="map.jpg" id="map">
+<img src="map.jpg" id="map">
 </div>
 
 <script>
-/* Firebase Config */
-const firebaseConfig = {
-    apiKey: "AIzaSyBZUhksZ6rd_8t9iTFN2Mo-45zNM4E4yuQ",
-    authDomain: "rlachdanakxkq.firebaseapp.com",
-    databaseURL: "https://rlachdanakxkq-default-rtdb.europe-west1.firebasedatabase.app",
-    projectId: "rlachdanakxkq",
-    storageBucket: "rlachdanakxkq.firebasestorage.app",
-    messagingSenderId: "800304150391",
-    appId: "1:800304150391:web:45b4041a549edc3ce3d372"
+const firebaseConfig={
+    apiKey:"AIzaSyBZUhksZ6rd_8t9iTFN2Mo-45zNM4E4yuQ",
+    authDomain:"rlachdanakxkq.firebaseapp.com",
+    databaseURL:"https://rlachdanakxkq-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId:"rlachdanakxkq",
+    storageBucket:"rlachdanakxkq.firebasestorage.app",
+    messagingSenderId:"800304150391",
+    appId:"1:800304150391:web:45b4041a549edc3ce3d372"
 };
 
 firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
-</script>
+const db=firebase.database();
 
-<script>
-let myName = "";
-const markersCache = {}; // key → firebaseKey
+let myName="";
+const map=document.getElementById("map");
+const container=document.getElementById("mapContainer");
 
 function enter(){
-    const name = document.getElementById("nickname").value.trim();
-    if(!name){
-        alert("닉네임 입력해라");
-        return;
-    }
-    myName = name;
+    const name=document.getElementById("nickname").value.trim();
+    if(!name){ alert("닉네임 입력"); return; }
+
+    myName=name;
     document.getElementById("loginBox").style.display="none";
-    document.getElementById("mapContainer").style.display="block";
+    container.style.display="inline-block";
 }
 
-const map = document.getElementById("map");
+/* 좌표 계산 */
+function getCoords(e){
+    const rect=map.getBoundingClientRect();
+    const scaleX=map.naturalWidth/rect.width;
+    const scaleY=map.naturalHeight/rect.height;
 
-/* 좌표 정확도 보정 */
-function getRealCoords(e){
-    const rect = map.getBoundingClientRect();
-    const scaleX = map.naturalWidth / rect.width;
-    const scaleY = map.naturalHeight / rect.height;
-
-    const x = Math.round((e.clientX - rect.left) * scaleX);
-    const y = Math.round((e.clientY - rect.top) * scaleY);
-
-    return {x,y};
+    return {
+        x:(e.clientX-rect.left)*scaleX,
+        y:(e.clientY-rect.top)*scaleY
+    };
 }
 
-/* 클릭 → 토글 */
+/* 클릭 → 마커 생성 */
 map.addEventListener("click",(e)=>{
     if(!myName) return;
 
-    const {x,y} = getRealCoords(e);
-    const key = `${x}_${y}`;
+    const p=getCoords(e);
 
-    if(markersCache[key]){
-        // OFF
-        db.ref("markers/"+markersCache[key]).remove();
-    }else{
-        // ON
-        const ref = db.ref("markers").push({
-            name: myName,
-            x:x,
-            y:y,
-            key:key,
-            time: Date.now()
-        });
-        markersCache[key]=ref.key;
-    }
+    db.ref("markers").push({
+        name:myName,
+        x:p.x,
+        y:p.y,
+        time:Date.now()
+    });
 });
 
-/* 생성 */
+/* 마커 생성 */
 db.ref("markers").on("child_added",(snap)=>{
-    const d = snap.val();
-    const fbKey = snap.key;
-    markersCache[d.key]=fbKey;
+    const d=snap.val();
+    const fbKey=snap.key;
 
-    const rect = map.getBoundingClientRect();
-    const scaleX = rect.width / map.naturalWidth;
-    const scaleY = rect.height / map.naturalHeight;
+    const rect=map.getBoundingClientRect();
+    const scaleX=rect.width/map.naturalWidth;
+    const scaleY=rect.height/map.naturalHeight;
 
-    const marker = document.createElement("div");
+    const marker=document.createElement("div");
     marker.className="marker";
-    marker.dataset.key=d.key;
-    marker.style.left = (d.x * scaleX)+"px";
-    marker.style.top  = (d.y * scaleY)+"px";
+    marker.dataset.fbkey=fbKey;
+
+    marker.style.left=(d.x*scaleX)+"px";
+    marker.style.top=(d.y*scaleY)+"px";
 
     const dot=document.createElement("div");
     dot.className="dot";
@@ -170,15 +150,23 @@ db.ref("markers").on("child_added",(snap)=>{
     marker.appendChild(dot);
     marker.appendChild(label);
 
-    document.getElementById("mapContainer").appendChild(marker);
+    /* ⭐ 마커 클릭하면 삭제 (누구든 가능) */
+    marker.onclick=(ev)=>{
+        ev.stopPropagation();
+        db.ref("markers/"+fbKey).remove();
+    };
+
+    container.appendChild(marker);
 });
 
-/* 삭제 */
+/* 마커 삭제 */
 db.ref("markers").on("child_removed",(snap)=>{
-    const d=snap.val();
-    delete markersCache[d.key];
+    const fbKey=snap.key;
+
     document.querySelectorAll(".marker").forEach(m=>{
-        if(m.dataset.key===d.key) m.remove();
+        if(m.dataset.fbkey===fbKey){
+            m.remove();
+        }
     });
 });
 </script>
