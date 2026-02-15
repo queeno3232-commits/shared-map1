@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<title>Shared Tactical Map</title>
+<title>Shared Map</title>
 
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
@@ -11,15 +11,14 @@
 <style>
 body{
     margin:0;
-    padding:0;
-    background:#0e0e0e;
+    background:#111;
     color:white;
-    font-family:Arial,sans-serif;
+    font-family:Arial;
     text-align:center;
 }
 
 #loginBox{
-    padding:15px;
+    padding:10px;
 }
 
 #mapContainer{
@@ -28,7 +27,9 @@ body{
 }
 
 #map{
-    width:800px;
+    width:100%;
+    max-width:1200px;   /* 🔥 큰 맵 대응 */
+    height:auto;
     user-select:none;
     cursor:crosshair;
 }
@@ -37,28 +38,28 @@ body{
     position:absolute;
     transform:translate(-50%,-50%);
     text-align:center;
-    font-size:12px;
+    font-size:11px;
     color:white;
-    cursor:pointer;
+    pointer-events:auto;
     z-index:10;
 }
 
 .dot{
-    width:12px;
-    height:12px;
+    width:10px;
+    height:10px;
     background:red;
     border-radius:50%;
     margin:auto;
     box-shadow:0 0 6px rgba(255,0,0,0.9);
 }
 
-.name{
-    font-size:11px;
-    margin-top:2px;
-    background:rgba(0,0,0,0.65);
-    padding:2px 6px;
+.label{
+    background:rgba(0,0,0,0.7);
+    padding:2px 5px;
     border-radius:4px;
+    margin-top:2px;
     white-space:nowrap;
+    font-size:11px;
 }
 </style>
 </head>
@@ -66,16 +67,17 @@ body{
 <body>
 
 <div id="loginBox">
-    <input id="nickname" placeholder="닉네임 입력">
+    <input type="text" id="nickname" placeholder="닉네임 입력">
     <button onclick="enter()">입장</button>
 </div>
 
 <div id="mapContainer" style="display:none;">
-    <img src="map.png" id="map">
+    <!-- 🔥 맵 이미지 변경 -->
+    <img src="map.jpg" id="map">
 </div>
 
 <script>
-/* ================= Firebase ================= */
+/* Firebase Config */
 const firebaseConfig = {
     apiKey: "AIzaSyBZUhksZ6rd_8t9iTFN2Mo-45zNM4E4yuQ",
     authDomain: "rlachdanakxkq.firebaseapp.com",
@@ -88,9 +90,11 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
-/* ============================================ */
+</script>
 
+<script>
 let myName = "";
+const markersCache = {}; // key → firebaseKey
 
 function enter(){
     const name = document.getElementById("nickname").value.trim();
@@ -105,68 +109,76 @@ function enter(){
 
 const map = document.getElementById("map");
 
-/* ================= 마커 생성 ================= */
+/* 좌표 정확도 보정 */
+function getRealCoords(e){
+    const rect = map.getBoundingClientRect();
+    const scaleX = map.naturalWidth / rect.width;
+    const scaleY = map.naturalHeight / rect.height;
+
+    const x = Math.round((e.clientX - rect.left) * scaleX);
+    const y = Math.round((e.clientY - rect.top) * scaleY);
+
+    return {x,y};
+}
+
+/* 클릭 → 토글 */
 map.addEventListener("click",(e)=>{
     if(!myName) return;
 
-    const rect = map.getBoundingClientRect();
+    const {x,y} = getRealCoords(e);
+    const key = `${x}_${y}`;
 
-    // 🔥 비율 좌표로 변환 (0~1)
-    const rx = (e.clientX - rect.left) / rect.width;
-    const ry = (e.clientY - rect.top) / rect.height;
-
-    db.ref("markers").push({
-        name: myName,
-        rx: rx,
-        ry: ry,
-        time: Date.now()
-    });
+    if(markersCache[key]){
+        // OFF
+        db.ref("markers/"+markersCache[key]).remove();
+    }else{
+        // ON
+        const ref = db.ref("markers").push({
+            name: myName,
+            x:x,
+            y:y,
+            key:key,
+            time: Date.now()
+        });
+        markersCache[key]=ref.key;
+    }
 });
 
-/* ================= 마커 표시 ================= */
-db.ref("markers").on("child_added",(snapshot)=>{
-    const data = snapshot.val();
-    const fbKey = snapshot.key;
+/* 생성 */
+db.ref("markers").on("child_added",(snap)=>{
+    const d = snap.val();
+    const fbKey = snap.key;
+    markersCache[d.key]=fbKey;
+
+    const rect = map.getBoundingClientRect();
+    const scaleX = rect.width / map.naturalWidth;
+    const scaleY = rect.height / map.naturalHeight;
 
     const marker = document.createElement("div");
     marker.className="marker";
-    marker.dataset.key = fbKey;
+    marker.dataset.key=d.key;
+    marker.style.left = (d.x * scaleX)+"px";
+    marker.style.top  = (d.y * scaleY)+"px";
 
-    // 🔥 비율 → 실제 px 변환
-    const mapRect = map.getBoundingClientRect();
-    const x = data.rx * mapRect.width;
-    const y = data.ry * mapRect.height;
-
-    marker.style.left = x + "px";
-    marker.style.top  = y + "px";
-
-    const dot = document.createElement("div");
+    const dot=document.createElement("div");
     dot.className="dot";
 
-    const name = document.createElement("div");
-    name.className="name";
-    name.innerText = data.name;
+    const label=document.createElement("div");
+    label.className="label";
+    label.innerText=d.name;
 
     marker.appendChild(dot);
-    marker.appendChild(name);
-
-    /* ===== 마커 클릭 시 삭제 (누구든 삭제 가능) ===== */
-    marker.addEventListener("click",(ev)=>{
-        ev.stopPropagation();
-        db.ref("markers/" + fbKey).remove();
-    });
+    marker.appendChild(label);
 
     document.getElementById("mapContainer").appendChild(marker);
 });
 
-/* ================= 마커 삭제 ================= */
-db.ref("markers").on("child_removed",(snapshot)=>{
-    const fbKey = snapshot.key;
-
+/* 삭제 */
+db.ref("markers").on("child_removed",(snap)=>{
+    const d=snap.val();
+    delete markersCache[d.key];
     document.querySelectorAll(".marker").forEach(m=>{
-        if(m.dataset.key === fbKey){
-            m.remove();
-        }
+        if(m.dataset.key===d.key) m.remove();
     });
 });
 </script>
