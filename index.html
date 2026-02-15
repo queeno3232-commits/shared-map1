@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<title>Shared Map</title>
+<title>Shared Tactical Map</title>
 
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
@@ -15,26 +15,47 @@ body{
  text-align:center;
  font-family:Arial;
 }
+
+#topbar{
+ padding:8px;
+ background:#000;
+}
+
 #mapContainer{
  position:relative;
  display:inline-block;
 }
+
 #map{
  width:100%;
  max-width:1200px;
  cursor:crosshair;
 }
+
 .marker{
  position:absolute;
  transform:translate(-50%,-50%);
  cursor:pointer;
  z-index:10;
 }
+
 .dot{
- width:10px;height:10px;
+ width:10px;
+ height:10px;
  background:red;
  border-radius:50%;
 }
+
+/* ⭐ 파란색 적 위치 */
+.enemyDot{
+ width:14px;
+ height:14px;
+ background:#0077ff;   /* 파란색 */
+ border:2px solid #00ffff;
+ border-radius:50%;
+ box-shadow:0 0 8px #00aaff;
+}
+
 .label{
  background:rgba(0,0,0,.7);
  padding:2px 5px;
@@ -42,13 +63,34 @@ body{
  font-size:11px;
  white-space:nowrap;
 }
+
+#users{
+ position:fixed;
+ right:10px;
+ top:10px;
+ background:rgba(0,0,0,.7);
+ padding:8px;
+ border-radius:6px;
+ font-size:12px;
+ text-align:left;
+}
 </style>
 </head>
 
 <body>
 
+<div id="topbar">
 <input id="nickname" placeholder="닉네임">
 <button onclick="enter()">입장</button>
+
+<button onclick="setMode('normal')">일반</button>
+<button onclick="setMode('enemy')">적 위치</button>
+</div>
+
+<div id="users">
+접속자:<br>
+<div id="userList"></div>
+</div>
 
 <div id="mapContainer" style="display:none;">
  <img src="map.jpg" id="map">
@@ -66,28 +108,36 @@ firebase.initializeApp(firebaseConfig);
 const db=firebase.database();
 
 let myName="";
+let mode="normal";
 let loaded=false;
+let userRef=null;
 
 const map=document.getElementById("map");
 const container=document.getElementById("mapContainer");
 
-/* 입장 */
+function setMode(m){
+ mode=m;
+}
+
 function enter(){
  myName=document.getElementById("nickname").value.trim();
  if(!myName){ alert("닉네임 입력"); return; }
 
  container.style.display="inline-block";
 
- // ⭐ 지도 실제 보인 뒤 마커 로드
+ userRef=db.ref("online/"+myName);
+ userRef.set(true);
+ userRef.onDisconnect().remove();
+
  setTimeout(()=>{
    if(!loaded){
      loadMarkers();
+     watchUsers();
      loaded=true;
    }
  },100);
 }
 
-/* 좌표 비율 저장 */
 function getRatio(e){
  const rect=map.getBoundingClientRect();
  return {
@@ -96,7 +146,6 @@ function getRatio(e){
  };
 }
 
-/* 클릭 → 생성 */
 map.addEventListener("click",(e)=>{
  if(!myName) return;
 
@@ -105,11 +154,11 @@ map.addEventListener("click",(e)=>{
  db.ref("markers").push({
   name:myName,
   rx:p.rx,
-  ry:p.ry
+  ry:p.ry,
+  type:mode
  });
 });
 
-/* ⭐ 마커 로딩 함수 */
 function loadMarkers(){
 
  db.ref("markers").on("child_added",(snap)=>{
@@ -126,11 +175,18 @@ function loadMarkers(){
    m.style.top=(d.ry*rect.height)+"px";
 
    const dot=document.createElement("div");
-   dot.className="dot";
+
+   if(d.type==="enemy"){
+     dot.className="enemyDot";
+   }else{
+     dot.className="dot";
+   }
 
    const label=document.createElement("div");
    label.className="label";
-   label.innerText=d.name;
+   label.innerText=d.type==="enemy"
+      ? "ENEMY - "+d.name
+      : d.name;
 
    m.appendChild(dot);
    m.appendChild(label);
@@ -151,15 +207,19 @@ function loadMarkers(){
  });
 }
 
-/* 화면 리사이즈 → 위치 재계산 */
-window.addEventListener("resize",()=>{
- document.querySelectorAll(".marker").forEach(m=>m.remove());
- loaded=false;
- if(container.style.display!=="none"){
-   loadMarkers();
-   loaded=true;
- }
-});
+function watchUsers(){
+ db.ref("online").on("value",(snap)=>{
+   const data=snap.val()||{};
+   const list=document.getElementById("userList");
+   list.innerHTML="";
+
+   Object.keys(data).forEach(name=>{
+     const d=document.createElement("div");
+     d.innerText="• "+name;
+     list.appendChild(d);
+   });
+ });
+}
 </script>
 
 </body>
